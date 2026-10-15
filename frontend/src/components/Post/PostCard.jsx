@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUserById, formatCount } from '../../data/mockData';
+import { formatCount } from '../../data/mockData';
 import { formatDistanceToNow } from 'date-fns';
 import {
   FiMessageCircle, FiRepeat, FiHeart, FiBookmark,
@@ -13,12 +13,16 @@ import ReportModal from '../Moderation/ReportModal';
 import './PostCard.css';
 
 export default function PostCard({ post, onLike, onRepost, onBookmark, onDelete }) {
-  const user = getUserById(post.userId);
+  const user = post.user;
   const navigate = useNavigate();
   const [liked, setLiked] = useState(post.isLiked);
-  const [likesCount, setLikesCount] = useState(post.likes);
+  const [likesCount, setLikesCount] = useState(
+  post.likes ?? post.likeCount ?? 0
+   );
   const [reposted, setReposted] = useState(post.isReposted);
-  const [repostsCount, setRepostsCount] = useState(post.reposts);
+  const [repostsCount, setRepostsCount] = useState(
+  post.reposts ?? post.retweetCount ?? 0
+  );
   const [bookmarked, setBookmarked] = useState(post.isBookmarked);
   const [showMenu, setShowMenu] = useState(false);
   const [showEditHistory, setShowEditHistory] = useState(false);
@@ -125,7 +129,7 @@ export default function PostCard({ post, onLike, onRepost, onBookmark, onDelete 
           <div className="post-actions">
             <button className="post-action action-reply" onClick={(e) => { e.stopPropagation(); goToPost(); }}>
               <FiMessageCircle size={18} />
-              <span>{formatCount(post.comments)}</span>
+              <span>{formatCount(post.comments ?? post.replyCount ?? 0)}</span>
             </button>
             <button className={`post-action action-repost ${reposted ? 'reposted' : ''}`} onClick={handleRepost}>
               <FiRepeat size={18} />
