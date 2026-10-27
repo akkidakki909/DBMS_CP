@@ -10,6 +10,7 @@ function toPublicTweet(t) {
     id: t.id, userId: t.user_id, content: t.content, parentTweetId: t.parent_tweet_id,
     likeCount: t.like_count, retweetCount: t.retweet_count, replyCount: t.reply_count,
     createdAt: t.created_at,
+    user: t.username ? { id:t.user_id, username:t.username, displayName:t.display_name || t.username, handle:`@${t.username}`, avatar:t.avatar_url || '', isVerified:!!t.is_verified } : undefined,
   };
 }
 
@@ -28,6 +29,14 @@ router.post('/', requireAuth, async (req, res) => {
     [req.userId, content, parentTweetId || null, !!parentTweetId]
   );
   const tweet = rows[0];
+
+  // Notify the parent-post author when someone replies.
+  if (parentTweetId) {
+    const parent = await query('SELECT user_id FROM tweets WHERE id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1', [parentTweetId]);
+    if (parent.rows[0] && parent.rows[0].user_id !== req.userId) {
+      await query("INSERT INTO notifications(user_id,actor_id,type,tweet_id) VALUES($1,$2,'reply',$3)", [parent.rows[0].user_id, req.userId, tweet.id]);
+    }
+  }
 
   // hashtags: extract, upsert, link, bump Redis trending
   const tags = [...content.matchAll(/#(\w+)/g)].map(m => m[1]);
@@ -59,7 +68,7 @@ router.get('/:id/thread', optionalAuth, async (req, res) => {
        FROM tweets t
        JOIN thread th ON t.parent_tweet_id = th.id
      )
-     SELECT * FROM thread ORDER BY depth, created_at;`,
+     SELECT thread.*,u.username,u.display_name,u.avatar_url,u.is_verified FROM thread JOIN users u ON u.id=thread.user_id ORDER BY depth, created_at;`,
     [req.params.id]
   );
   res.json(rows.map(toPublicTweet));

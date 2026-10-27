@@ -53,6 +53,8 @@ router.get('/', requireAuth, async (req, res) => {
           t.like_count,
           t.retweet_count,
           t.reply_count,
+          t.edit_count,
+          t.image_url,
           t.created_at,
 
           u.username,
@@ -103,6 +105,8 @@ router.get('/', requireAuth, async (req, res) => {
           t.like_count,
           t.retweet_count,
           t.reply_count,
+          t.edit_count,
+          t.image_url,
           t.created_at,
 
           u.username,
@@ -142,7 +146,22 @@ router.get('/', requireAuth, async (req, res) => {
     // Convert database rows to frontend-friendly objects
     // --------------------------------------------------
 
-    const tweets = rows.map((tweet) => ({
+    const tweets = await Promise.all(rows.map(async (tweet) => {
+      const mediaResult = await query('SELECT media_url FROM tweet_media WHERE tweet_id=$1 AND tweet_created_at=$2 ORDER BY created_at', [tweet.id, tweet.created_at]);
+      const pollResult = await query(`SELECT p.id AS poll_id,p.question,p.ends_at, o.id AS option_id,o.option_text,count(v.user_id)::int AS votes, bool_or(v.user_id=$2) AS user_voted
+        FROM polls p JOIN poll_options o ON o.poll_id=p.id LEFT JOIN poll_votes v ON v.option_id=o.id
+        WHERE p.tweet_id=$1 GROUP BY p.id,o.id ORDER BY o.position`, [tweet.id, req.userId]);
+      let poll = null;
+      if (pollResult.rows.length) {
+        const first = pollResult.rows[0];
+        poll = { id:first.poll_id, tweetId:tweet.id, question:first.question, endsAt:first.ends_at, hasVoted:pollResult.rows.some(r=>r.user_voted), options:pollResult.rows.map(r=>({id:r.option_id,text:r.option_text,votes:r.votes})), totalVotes:pollResult.rows.reduce((n,r)=>n+r.votes,0) };
+      }
+      const [likeState, repostState, bookmarkState] = await Promise.all([
+        query('SELECT 1 FROM likes WHERE user_id=$1 AND tweet_id=$2 LIMIT 1', [req.userId, tweet.id]),
+        query('SELECT 1 FROM retweets WHERE user_id=$1 AND tweet_id=$2 LIMIT 1', [req.userId, tweet.id]),
+        query('SELECT 1 FROM bookmarks WHERE user_id=$1 AND tweet_id=$2 LIMIT 1', [req.userId, tweet.id]).catch(() => ({rows:[]})),
+      ]);
+      return ({
       id: tweet.id,
 
       userId: tweet.user_id,
@@ -157,13 +176,18 @@ router.get('/', requireAuth, async (req, res) => {
 
       comments: tweet.reply_count || 0,
 
+      editCount: tweet.edit_count || 0,
+      imageUrl: tweet.image_url || null,
+      images: mediaResult.rows.map((m) => m.media_url),
+      poll,
+
       createdAt: tweet.created_at,
 
-      isLiked: false,
+      isLiked: likeState.rows.length > 0,
 
-      isReposted: false,
+      isReposted: repostState.rows.length > 0,
 
-      isBookmarked: false,
+      isBookmarked: bookmarkState.rows.length > 0,
 
       // User information
       user: {
@@ -174,6 +198,7 @@ router.get('/', requireAuth, async (req, res) => {
         avatar: tweet.avatar_url,
         isVerified: tweet.is_verified,
       },
+    });
     }));
 
     const payload = {

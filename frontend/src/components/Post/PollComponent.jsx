@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import apiClient from '../../api/client';
 import { formatDistanceToNow } from 'date-fns';
 import './PollComponent.css';
 
@@ -11,14 +12,15 @@ export default function PollComponent({ poll }) {
   const timeLeft = formatDistanceToNow(new Date(poll.endsAt));
   const isExpired = new Date(poll.endsAt) < new Date();
 
-  const handleVote = (optionId) => {
+  const [voteError, setVoteError] = useState('');
+  const handleVote = async (optionId) => {
     if (hasVoted || isExpired) return;
-    setVotedOptionId(optionId);
-    setHasVoted(true);
-    setOptions((prev) =>
-      prev.map((o) => (o.id === optionId ? { ...o, votes: o.votes + 1 } : o))
-    );
-    setTotalVotes((prev) => prev + 1);
+    try {
+      if (poll.id) await apiClient.post(`/polls/${poll.id}/vote`, { optionId });
+      setVotedOptionId(optionId); setHasVoted(true);
+      setOptions((prev) => prev.map((o) => (o.id === optionId ? { ...o, votes: o.votes + 1 } : o)));
+      setTotalVotes((prev) => prev + 1); setVoteError('');
+    } catch (e) { setVoteError(e.response?.data?.error || 'Vote could not be saved.'); }
   };
 
   const showResults = hasVoted || isExpired;
@@ -49,6 +51,7 @@ export default function PollComponent({ poll }) {
           );
         })}
       </div>
+      {voteError && <p className="text-danger text-sm" role="alert">{voteError}</p>}
       <div className="poll-footer text-sm text-tertiary">
         <span>{totalVotes.toLocaleString()} votes</span>
         <span>·</span>

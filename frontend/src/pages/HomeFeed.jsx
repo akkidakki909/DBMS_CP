@@ -22,9 +22,10 @@ function convertApiTweet(tweet) {
     isReposted: false,
     isBookmarked: false,
 
-    images: [],
-    poll: null,
-    isEdited: false,
+    images: tweet.images?.length ? tweet.images : (tweet.imageUrl ? [tweet.imageUrl] : []),
+    poll: tweet.poll || null,
+    editCount: tweet.editCount || 0,
+    isEdited: (tweet.editCount || 0) > 0,
     editHistory: [],
   };
 }

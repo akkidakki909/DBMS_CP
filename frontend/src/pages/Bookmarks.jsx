@@ -1,20 +1,21 @@
-import { useState } from 'react';
-import { posts as mockPosts, bookmarkCollections } from '../data/mockData';
+import { useEffect, useState } from 'react';
+import { bookmarkCollections } from '../data/mockData';
+import { apiClient } from '../api/client';
 import PostCard from '../components/Post/PostCard';
 import { FiFolder, FiBookmark } from 'react-icons/fi';
 import './Bookmarks.css';
 
 export default function Bookmarks() {
-  const [activeView, setActiveView] = useState('all'); // 'all' or collection id
-
-  // Get all bookmarked posts
-  const bookmarkedPosts = mockPosts.filter((p) => p.isBookmarked);
+  const [activeView, setActiveView] = useState('all');
+  const [bookmarkedPosts, setBookmarkedPosts] = useState([]);
+  const [error, setError] = useState('');
+  useEffect(() => { apiClient.get('/bookmarks').then(({data}) => setBookmarkedPosts(data)).catch((e) => setError(e.response?.data?.error || 'Could not load bookmarks.')); }, []);
 
   // Get posts for a specific collection
   const getCollectionPosts = (collectionId) => {
     const collection = bookmarkCollections.find((c) => c.id === collectionId);
     if (!collection) return [];
-    return mockPosts.filter((p) => collection.postIds.includes(p.id));
+    return bookmarkedPosts.filter((p) => collection.postIds.includes(p.id));
   };
 
   const displayPosts = activeView === 'all'
@@ -47,13 +48,14 @@ export default function Bookmarks() {
           >
             <FiFolder size={14} />
             {collection.name}
-            <span className="bm-chip-count">{collection.postIds.length}</span>
+            <span className="bm-chip-count">{bookmarkedPosts.filter((p) => collection.postIds.includes(p.id)).length}</span>
           </button>
         ))}
       </div>
 
       {/* Bookmarked Posts */}
       <div className="bm-posts">
+        {error && <p className="text-danger text-sm">{error}</p>}
         {displayPosts.length > 0 ? (
           displayPosts.map((post) => (
             <PostCard key={post.id} post={post} />

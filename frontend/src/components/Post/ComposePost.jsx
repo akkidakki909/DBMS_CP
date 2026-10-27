@@ -20,6 +20,8 @@ export default function ComposePost({
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
   const [showPollCreator, setShowPollCreator] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojis = ['😀','😃','😄','😁','😆','🥹','😂','🤣','😊','😍','🥰','😘','😎','🤔','🙌','👏','👍','👎','🙏','💪','🔥','❤️','💙','🎉','✨','🚀','🌈','☕','📚','💯'];
 
   const [pollOptions, setPollOptions] = useState([
     '',
@@ -29,7 +31,7 @@ export default function ComposePost({
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
 
-  const maxLength = 500;
+  const maxLength = 280;
 
   const charCount = content.length;
   const charPercent = (charCount / maxLength) * 100;
@@ -43,14 +45,18 @@ export default function ComposePost({
 
   const handlePost = async () => {
     if (!canPost) return;
+    if (showPollCreator) {
+      const cleanOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+      if (cleanOptions.length < 2 || cleanOptions.length > 4 || new Set(cleanOptions).size !== cleanOptions.length) {
+        setError('A poll needs 2–4 non-empty, unique options.'); return;
+      }
+    }
 
     setPosting(true);
     setError('');
 
     try {
-      const response = await apiClient.post('/tweets', {
-        content: content.trim(),
-      });
+      const response = await apiClient.post('/tweets', { content: content.trim() });
 
       /*
        * Backend returns the newly created tweet.
@@ -92,12 +98,19 @@ export default function ComposePost({
         },
       };
 
-      /*
-       * IMPORTANT:
-       * This immediately updates HomeFeed.jsx,
-       * so the newly created post appears without
-       * manually refreshing the browser.
-       */
+      // Persist optional poll and image URL after the post has an ID.
+      if (showPollCreator) {
+        const cleanOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+        if (cleanOptions.length < 2 || new Set(cleanOptions).size !== cleanOptions.length) {
+          throw new Error('A poll needs 2–4 non-empty, unique options.');
+        }
+        await apiClient.post(`/tweets/${tweet.id}/poll`, { question: content.trim(), options: cleanOptions, durationHours: 24 });
+      }
+      if (images[0]) {
+        await apiClient.post(`/tweets/${tweet.id}/media`, { mediaUrl: images[0], altText: 'Post image' });
+      }
+
+      // Reload from PostgreSQL only after optional features have been saved.
       onPost?.(newPost);
 
       // Clear composer
@@ -107,11 +120,7 @@ export default function ComposePost({
       setPollOptions(['', '']);
     } catch (err) {
       console.error('Post creation failed:', err);
-
-      setError(
-        err.response?.data?.error ||
-          'Failed to create post. Please try again.'
-      );
+      setError(err.response?.data?.error || err.message || 'Failed to create post. Please try again.');
     } finally {
       setPosting(false);
     }
@@ -228,16 +237,14 @@ export default function ComposePost({
           </div>
         )}
 
+        {images.length > 0 && <div style={{margin:'8px 0'}}><img src={images[0]} alt="Image preview" style={{maxWidth:'100%',maxHeight:220,borderRadius:12}} onError={() => setError('This image URL could not be loaded. Use a direct HTTPS link to an image file.')} /><button type="button" className="btn btn-secondary btn-sm" onClick={() => setImages([])}>Remove image</button></div>}
+
         {/* Bottom Bar */}
         <div className="compose-bottom">
 
           <div className="compose-tools">
 
-            <button
-              className="compose-tool"
-              title="Add image"
-              type="button"
-            >
+            <button className={`compose-tool ${images.length ? 'active' : ''}`} title="Attach image URL" type="button" onClick={() => { const url = window.prompt('Paste an HTTPS image URL (image hosting is external):', images[0] || ''); if (url === null) return; if (url && !/^https:\/\//i.test(url)) { setError('Image URL must start with https://'); return; } setImages(url ? [url] : []); setError(''); }}>
               <FiImage size={18} />
             </button>
 
@@ -258,15 +265,12 @@ export default function ComposePost({
               <FiBarChart2 size={18} />
             </button>
 
-            <button
-              className="compose-tool"
-              title="Emoji"
-              type="button"
-            >
+            <button className={`compose-tool ${showEmojiPicker ? 'active' : ''}`} title="Choose emoji" type="button" onClick={() => setShowEmojiPicker((v) => !v)}>
               <FiSmile size={18} />
             </button>
 
           </div>
+          {showEmojiPicker && <div className="compose-emoji-picker" role="group" aria-label="Choose an emoji">{emojis.map((emoji) => <button key={emoji} type="button" title={emoji} onClick={() => { setContent((prev) => `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${emoji}`); setShowEmojiPicker(true); }}>{emoji}</button>)}</div>}
 
           <div className="compose-right">
 

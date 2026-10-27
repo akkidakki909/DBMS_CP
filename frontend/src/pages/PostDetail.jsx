@@ -1,87 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FiArrowLeft } from 'react-icons/fi';
-import { posts as mockPosts, getCommentsByPost, getUserById } from '../data/mockData';
+import { apiClient } from '../api/client';
 import PostCard from '../components/Post/PostCard';
-import ComposePost from '../components/Post/ComposePost';
-import { formatDistanceToNow } from 'date-fns';
+import { useAuth } from '../context/AuthContext';
 import './PostDetail.css';
 
+function mapTweet(t) { return { id:t.id, userId:t.userId || t.user_id, content:t.content, createdAt:t.createdAt || t.created_at, likes:t.likeCount ?? t.like_count ?? 0, reposts:t.retweetCount ?? t.retweet_count ?? 0, comments:t.replyCount ?? t.reply_count ?? 0, images:t.images || (t.imageUrl ? [t.imageUrl] : []), poll:t.poll || null, editCount:t.editCount || 0, isLiked:!!t.isLiked, isReposted:!!t.isReposted, isBookmarked:!!t.isBookmarked, user:t.user || {id:t.user_id, username:t.username || 'user', displayName:t.display_name || t.username || 'User', handle:`@${t.username || 'user'}`, avatar:t.avatar_url || ''} }; }
 export default function PostDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const postId = Number(id);
-
-  const post = mockPosts.find((p) => p.id === postId);
-  const [commentsList, setCommentsList] = useState(() => getCommentsByPost(postId));
-
-  if (!post) {
-    return (
-      <div className="feed-container page-enter">
-        <div className="page-header">
-          <button className="back-btn btn-ghost" onClick={() => navigate(-1)}>
-            <FiArrowLeft size={20} />
-          </button>
-          <h1>Post</h1>
-        </div>
-        <div className="empty-state">
-          <p className="font-semibold">Post not found</p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleReply = (newPost) => {
-    const newComment = {
-      id: Date.now(),
-      postId,
-      userId: newPost.userId,
-      content: newPost.content,
-      createdAt: new Date().toISOString(),
-      likes: 0,
-    };
-    setCommentsList([newComment, ...commentsList]);
-  };
-
-  return (
-    <div className="feed-container page-enter" id="post-detail">
-      <div className="page-header">
-        <button className="back-btn btn-ghost" onClick={() => navigate(-1)}>
-          <FiArrowLeft size={20} />
-        </button>
-        <h1>Post</h1>
-      </div>
-
-      <PostCard post={post} />
-
-      <div className="reply-composer-section">
-        <ComposePost
-          onPost={handleReply}
-          placeholder="Post your reply"
-        />
-      </div>
-
-      <div className="replies-list">
-        {commentsList.map((c) => {
-          const commentUser = getUserById(c.userId);
-          if (!commentUser) return null;
-          const timeAgo = formatDistanceToNow(new Date(c.createdAt), { addSuffix: true });
-          return (
-            <div key={c.id} className="reply-card post-border">
-              <img src={commentUser.avatar} alt={commentUser.displayName} className="avatar avatar-md" />
-              <div className="reply-body">
-                <div className="reply-header">
-                  <span className="font-semibold">{commentUser.displayName}</span>
-                  <span className="text-secondary">{commentUser.handle}</span>
-                  <span className="text-tertiary">·</span>
-                  <span className="text-tertiary text-sm">{timeAgo}</span>
-                </div>
-                <p className="reply-content">{c.content}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+ const { id } = useParams(); const navigate = useNavigate(); const { user } = useAuth();
+ const [thread,setThread]=useState([]); const [reply,setReply]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
+ const load=async()=>{try{const {data}=await apiClient.get(`/tweets/${id}/thread`);setThread(data.map(mapTweet));setError('');}catch(e){setError(e.response?.data?.error||'Could not load this post.');}};
+ useEffect(()=>{load();},[id]);
+ const sendReply=async()=>{if(!reply.trim()||busy)return;setBusy(true);try{await apiClient.post('/tweets',{content:reply.trim(),parentTweetId:id});setReply('');await load();}catch(e){setError(e.response?.data?.error||'Reply could not be saved.');}finally{setBusy(false);}};
+ return <div className="feed-container page-enter" id="post-detail"><div className="page-header"><button className="back-btn btn-ghost" onClick={()=>navigate(-1)}><FiArrowLeft size={20}/></button><h1>Post</h1></div>{error&&<p className="text-danger text-sm">{error}</p>}{thread.length? <><PostCard post={thread[0]}/><div className="reply-composer-section"><textarea className="compose-textarea" placeholder="Write a reply…" value={reply} onChange={e=>setReply(e.target.value)} maxLength={280}/><button className="btn btn-primary btn-sm" onClick={sendReply} disabled={!reply.trim()||busy}>{busy?'Sending…':'Reply'}</button></div>{thread.slice(1).map(t=><PostCard key={t.id} post={t}/>)}</>:!error&&<p className="text-secondary">Loading post…</p>}</div>;
 }

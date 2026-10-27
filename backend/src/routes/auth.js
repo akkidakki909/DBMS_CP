@@ -9,7 +9,7 @@ function toPublicUser(u) {
   return {
     id: u.id, username: u.username, displayName: u.display_name, handle: '@' + u.username,
     email: u.email, bio: u.bio, avatar: u.avatar_url, banner: u.banner_url,
-    isVerified: u.is_verified, followersCount: u.followers_count,
+    isVerified: u.is_verified, role: u.role || 'user', followersCount: u.followers_count,
     followingCount: u.following_count, postsCount: u.posts_count,
   };
 }

@@ -11,6 +11,7 @@ import followRoutes from './routes/follows.js';
 import engagementRoutes from './routes/engagement.js';
 import searchRoutes from './routes/search.js';
 import analyticsRoutes from './routes/analytics.js';
+import futureScopeRoutes from './routes/futureScope.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/follows', followRoutes);
 app.use('/api', engagementRoutes);       // /api/likes/:id, /api/retweets/:id
 app.use('/api/search', searchRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api', futureScopeRoutes); // roles, moderation, edit history, polls, messages, media, trends
 
 app.use((err, _req, res, _next) => {
   console.error(err);

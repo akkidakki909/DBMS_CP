@@ -49,4 +49,8 @@ router.post('/retweets/:tweetId', requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
+router.delete('/retweets/:tweetId', requireAuth, async (req,res,next) => {
+  try { await query('DELETE FROM retweets WHERE user_id=$1 AND tweet_id=$2', [req.userId, req.params.tweetId]); res.status(204).end(); } catch(e) { next(e); }
+});
+
 export default router;

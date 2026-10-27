@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { notifications as mockNotifications, getUserById } from '../data/mockData';
+import { useEffect, useState } from 'react';
+import { apiClient } from '../api/client';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { FiHeart, FiRepeat, FiMessageCircle, FiUserPlus, FiAtSign } from 'react-icons/fi';
@@ -26,11 +26,14 @@ function getNotifText(type) {
 
 export default function Notifications() {
   const [activeTab, setActiveTab] = useState('all');
+  const [notifications, setNotifications] = useState([]);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  useEffect(() => { apiClient.get('/notifications').then(({data}) => setNotifications(data.map(n => ({...n, type:n.type==='retweet'?'repost':n.type})))).catch(e => setError(e.response?.data?.error || 'Could not load notifications.')); }, []);
 
   const filteredNotifs = activeTab === 'mentions'
-    ? mockNotifications.filter((n) => n.type === 'mention' || n.type === 'reply')
-    : mockNotifications;
+    ? notifications.filter((n) => n.type === 'mention' || n.type === 'reply')
+    : notifications;
 
   return (
     <div className="feed-container page-enter" id="notifications-page">
@@ -53,11 +56,12 @@ export default function Notifications() {
         </div>
       </div>
 
+      {error && <p className="text-danger text-sm" role="alert">{error}</p>}
       {/* Notification List */}
       <div className="notif-list">
         {filteredNotifs.map((notif) => {
-          const fromUser = getUserById(notif.fromUserId);
-          if (!fromUser) return null;
+          const fromUser = { id: notif.fromUserId, username: notif.username, displayName: notif.displayName, avatar: notif.avatar };
+          if (!fromUser.id) return null;
           const cfg = notifIcons[notif.type] || notifIcons.like;
           const IconComp = cfg.icon;
           const timeAgo = formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true });
@@ -66,7 +70,7 @@ export default function Notifications() {
             <div
               key={notif.id}
               className={`notif-item ${!notif.isRead ? 'unread' : ''}`}
-              onClick={() => notif.postId ? navigate(`/post/${notif.postId}`) : navigate(`/profile/${fromUser.username}`)}
+              onClick={async () => { if (!notif.isRead) { try { await apiClient.patch(`/notifications/${notif.id}/read`); setNotifications(prev => prev.map(n => n.id===notif.id ? {...n,isRead:true} : n)); } catch {} } if (notif.postId) navigate(`/post/${notif.postId}`); else navigate(`/profile/${fromUser.username}`); }}
               id={`notif-${notif.id}`}
             >
               <div className="notif-icon-wrapper" style={{ background: cfg.bg }}>
@@ -89,6 +93,7 @@ export default function Notifications() {
             </div>
           );
         })}
+        {!filteredNotifs.length && !error && <p className="text-secondary text-sm">No notifications yet.</p>}
       </div>
     </div>
   );
